@@ -32,6 +32,12 @@ export class Customer extends Entity {
   })
   name: string;
 
+  @property({
+    type: 'string',
+    required: false,
+  })
+  _rev?: string;
+
   @hasMany(() => Order)
   orders: Order[];
 

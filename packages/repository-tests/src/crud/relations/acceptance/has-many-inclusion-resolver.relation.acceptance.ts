@@ -187,33 +187,66 @@ export function hasManyInclusionResolverAcceptance(
       expect(toJSON(result)).to.deepEqual(toJSON(expected));
     });
 
-    skipIf(
-      features.hasRevisionToken,
-      it,
-      'returns inclusions after running save() operation',
-      async () => {
-        // this shows save() works well with func ensurePersistable and ObjectId
-        // the test skips for Cloudant as it needs the _rev property for replacement.
-        // see replace-by-id.suite.ts
-        const thor = await customerRepo.create({name: 'Thor'});
-        const odin = await customerRepo.create({name: 'Odin'});
+    it('returns inclusions after running save() operation', async () => {
+      // this shows save() works well with func ensurePersistable and ObjectId
+      // the test skips for Cloudant as it needs the _rev property for replacement.
+      // see replace-by-id.suite.ts
+      const thor = await customerRepo.create({name: 'Thor'});
+      const odin = await customerRepo.create({name: 'Odin'});
 
-        const thorOrder = await orderRepo.create({
-          customerId: thor.id,
-          description: 'Pizza',
-        });
+      const thorOrder = await orderRepo.create({
+        customerId: thor.id,
+        description: 'Pizza',
+      });
 
-        const pizza = await orderRepo.findById(thorOrder.id);
-        pizza.customerId = odin.id;
+      const pizza = await orderRepo.findById(thorOrder.id);
+      pizza.customerId = odin.id;
 
-        await orderRepo.save(pizza);
-        const odinPizza = await orderRepo.findById(thorOrder.id);
+      await orderRepo.save(pizza);
+      const odinPizza = await orderRepo.findById(thorOrder.id);
 
-        const result = await customerRepo.findById(odin.id, {
-          include: [{relation: 'orders'}],
-        });
-        const expected = {
-          ...odin,
+      const result = await customerRepo.findById(odin.id, {
+        include: [{relation: 'orders'}],
+      });
+      const expected = {
+        ...odin,
+        parentId: features.emptyValue,
+        orders: [
+          {
+            ...odinPizza,
+            isShipped: features.emptyValue,
+            // eslint-disable-next-line @typescript-eslint/camelcase
+            shipment_id: features.emptyValue,
+          },
+        ],
+      };
+      expect(toJSON(result)).to.containEql(toJSON(expected));
+    });
+
+    it('returns inclusions after running replaceById() operation', async () => {
+      // this shows replaceById() works well with func ensurePersistable and ObjectId
+      // the test skips for Cloudant as it needs the _rev property for replacement.
+      // see replace-by-id.suite.ts
+      const thor = await customerRepo.create({name: 'Thor'});
+
+      const thorOrder = await orderRepo.create({
+        customerId: thor.id,
+        description: 'Pizza',
+      });
+
+      const pizza = await orderRepo.findById(thorOrder.id.toString());
+      const reheatedPizza = {...pizza};
+      reheatedPizza.description = 'Reheated pizza';
+
+      await orderRepo.replaceById(thorOrder.id, reheatedPizza);
+      const odinPizza = await orderRepo.findById(thorOrder.id);
+
+      const result = await customerRepo.find({
+        include: [{relation: 'orders'}],
+      });
+      const expected = [
+        {
+          ...thor,
           parentId: features.emptyValue,
           orders: [
             {
@@ -223,53 +256,10 @@ export function hasManyInclusionResolverAcceptance(
               shipment_id: features.emptyValue,
             },
           ],
-        };
-        expect(toJSON(result)).to.containEql(toJSON(expected));
-      },
-    );
-
-    skipIf(
-      features.hasRevisionToken,
-      it,
-      'returns inclusions after running replaceById() operation',
-      async () => {
-        // this shows replaceById() works well with func ensurePersistable and ObjectId
-        // the test skips for Cloudant as it needs the _rev property for replacement.
-        // see replace-by-id.suite.ts
-        const thor = await customerRepo.create({name: 'Thor'});
-
-        const thorOrder = await orderRepo.create({
-          customerId: thor.id,
-          description: 'Pizza',
-        });
-
-        const pizza = await orderRepo.findById(thorOrder.id.toString());
-        const reheatedPizza = {...pizza};
-        reheatedPizza.description = 'Reheated pizza';
-
-        await orderRepo.replaceById(thorOrder.id, reheatedPizza);
-        const odinPizza = await orderRepo.findById(thorOrder.id);
-
-        const result = await customerRepo.find({
-          include: [{relation: 'orders'}],
-        });
-        const expected = [
-          {
-            ...thor,
-            parentId: features.emptyValue,
-            orders: [
-              {
-                ...odinPizza,
-                isShipped: features.emptyValue,
-                // eslint-disable-next-line @typescript-eslint/camelcase
-                shipment_id: features.emptyValue,
-              },
-            ],
-          },
-        ];
-        expect(toJSON(result)).to.deepEqual(toJSON(expected));
-      },
-    );
+        },
+      ];
+      expect(toJSON(result)).to.deepEqual(toJSON(expected));
+    });
 
     it('throws when navigational properties are present when updating model instance with save()', async () => {
       // save() calls replaceById so the result will be the same for replaceById
