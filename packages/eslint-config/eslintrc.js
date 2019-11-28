@@ -150,6 +150,7 @@ module.exports = {
     '@typescript-eslint/no-misused-promises': 'error',
 
     '@typescript-eslint/prefer-optional-chain': 'error',
+    '@typescript-eslint/return-await': 'error',
   },
 
   overrides: [
