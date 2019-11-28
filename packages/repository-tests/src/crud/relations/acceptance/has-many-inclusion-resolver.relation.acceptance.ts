@@ -244,12 +244,9 @@ export function hasManyInclusionResolverAcceptance(
         });
 
         const pizza = await orderRepo.findById(thorOrder.id.toString());
-        let reheatedPizza = {...pizza};
+        const reheatedPizza = {...pizza};
         reheatedPizza.description = 'Reheated pizza';
 
-        // The replace here changes the order's foreignKey from thor.id to odin.id
-        // which will be rejected by the fk constraint check in jugger
-        // So I modified this test to replace `description` only.
         await orderRepo.replaceById(thorOrder.id, reheatedPizza);
         const odinPizza = await orderRepo.findById(thorOrder.id);
 

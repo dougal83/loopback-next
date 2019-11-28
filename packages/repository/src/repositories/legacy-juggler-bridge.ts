@@ -536,18 +536,28 @@ export class DefaultCrudRepository<
     return includeRelatedModels<T, Relations>(this, entities, include, options);
   }
 
+  /**
+   * This function works as a persist hook.
+   * It converts an entity from the CRUD operations' caller
+   * to a persistable data that can will be stored in the
+   * back-end database.
+   *
+   * User can extend `DefaultCrudRepository` then override this
+   * function to execute custom persist hook.
+   * @param entity The entity passed from CRUD operations' caller.
+   * @param options
+   */
   protected async entityToData<R extends T>(
     entity: R | DataObject<R>,
     options = {},
   ): Promise<legacy.ModelData<legacy.PersistedModel>> {
-    this.ensurePersistable(entity, options);
-    return entity;
+    return this.ensurePersistable(entity, options);
   }
 
   /** Converts an entity object to a JSON object to check if it contains navigational property.
    * Throws an error if `entity` contains navigational property.
    *
-   * @param entity
+   * @param entity The entity passed from CRUD operations' caller.
    * @param options
    */
   protected ensurePersistable<R extends T>(
@@ -563,8 +573,8 @@ export class DefaultCrudRepository<
       typeof entity.toJSON === 'function' ? entity.toJSON() : {...entity};
     */
 
-    // proposal solution from agnes: delete the id property in the target dtat
-    // when runs replaceById
+    // proposal solution from agnes: delete the id property in the
+    // target data when runs replaceById
 
     const data: AnyObject = new this.entityClass(entity);
 
@@ -577,12 +587,6 @@ export class DefaultCrudRepository<
         );
       }
     }
-    // if (options.replacement === true) {
-    //   const idProperty = this.entityClass.getIdProperties()[0];
-    //   if (!data[idProperty] === undefined) {
-    //     throw new Error(`id property should not be included in ${data}`);
-    //   }
-    // }
     return data;
   }
 
