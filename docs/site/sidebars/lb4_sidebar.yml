@@ -178,7 +178,7 @@ children:
             url: deploying-with-pm2-and-nginx.html
             output: 'web, pdf'
 
-          - title: 'Deploying to Cloud with Appsody'
+          - title: 'Developing and Deploying LoopBack Applications with Appsody'
             url: Appsody-LoopBack.html
             output: 'web, pdf'
 
