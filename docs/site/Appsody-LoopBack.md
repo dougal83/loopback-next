@@ -659,21 +659,21 @@ Running command: docker stop appsodylb4todo-dev -t 10
 
 ### Turning on DEBUG tracing
 
-    To turn on debug tracing in a LoopBack 4 application running under the control of Appsody, you need to use the `'--docker-options'` parameter. You can specify this parameter for the run, debug and test commands.
+To turn on debug tracing in a LoopBack 4 application running under the control of Appsody, you need to use the `'--docker-options'` parameter. You can specify this parameter for the run, debug and test commands.
 
-    ```
-    appsody [run | debug | test] --docker-options "--env DEBUG=loopback*"
-    ```
+```
+appsody [run | debug | test] --docker-options "--env DEBUG=loopback*"
+```
 
-    You will see output similar to this:
+You will see output similar to this:
 
-    ```
-    [Container]   loopback:context:view Finding matching bindings +0ms
-    [Container]   loopback:context:view Reading bindings +0ms
-    [Container]   loopback:core:lifecycle Finished notification start of +26ms
-    [Container]   loopback:context [application] Resolving binding synchronously: servers.RestServer +89ms
-    [Container]   loopback:context:binding Get value for binding servers.RestServer +83ms
-    ```
+```
+[Container]   loopback:context:view Finding matching bindings +0ms
+[Container]   loopback:context:view Reading bindings +0ms
+[Container]   loopback:core:lifecycle Finished notification start of +26ms
+[Container]   loopback:context [application] Resolving binding synchronously: servers.RestServer +89ms
+[Container]   loopback:context:binding Get value for binding servers.RestServer +83ms
+```
 
 ## Deploying to a Kubernetes Cluster on IBM Cloud
 
