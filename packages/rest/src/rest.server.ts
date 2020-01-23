@@ -14,6 +14,7 @@ import {
 import {Application, CoreBindings, Server} from '@loopback/core';
 import {HttpServer, HttpServerOptions} from '@loopback/http-server';
 import {
+  ConsolidationEnhancer,
   getControllerSpec,
   OpenAPIObject,
   OpenApiSpec,
@@ -716,6 +717,8 @@ export class RestServer extends Context implements Server, HttpServerLike {
     if (requestContext) {
       spec = this.updateSpecFromRequest(spec, requestContext);
     }
+    const consolidationEnhancer = new ConsolidationEnhancer();
+    spec = consolidationEnhancer.modifySpec(spec);
 
     return spec;
   }
