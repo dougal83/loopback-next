@@ -4,6 +4,7 @@
 // License text available at https://opensource.org/licenses/MIT
 
 import debugFactory from 'debug';
+import {EventEmitter} from 'events';
 import {BindingAddress, BindingKey} from './binding-key';
 import {Context} from './context';
 import {createProxyWithInterceptors} from './interception-proxy';
@@ -139,6 +140,34 @@ export type BindingTag = TagMap | string;
  */
 export type BindingTemplate<T = unknown> = (binding: Binding<T>) => void;
 
+/**
+ * Information for a binding event
+ */
+export type BindingEvent = {
+  /**
+   * Event type
+   */
+  type: string;
+  /**
+   * Source binding that emits the event
+   */
+  binding: Readonly<Binding<unknown>>;
+  /**
+   * Operation that triggers the event
+   */
+  operation: string;
+};
+
+/**
+ * Event listeners for binding events
+ */
+export type BindingEventListener = (
+  /**
+   * Binding event
+   */
+  event: BindingEvent,
+) => void;
+
 type ValueGetter<T> = (
   ctx: Context,
   options: ResolutionOptions,
@@ -148,7 +177,7 @@ type ValueGetter<T> = (
  * Binding represents an entry in the `Context`. Each binding has a key and a
  * corresponding value getter.
  */
-export class Binding<T = BoundValue> {
+export class Binding<T = BoundValue> extends EventEmitter {
   /**
    * Key of the binding
    */
@@ -199,6 +228,7 @@ export class Binding<T = BoundValue> {
   }
 
   constructor(key: BindingAddress<T>, public isLocked: boolean = false) {
+    super();
     BindingKey.validate(key);
     this.key = key.toString();
   }
@@ -325,6 +355,15 @@ export class Binding<T = BoundValue> {
   }
 
   /**
+   * Emit a `changed` event
+   * @param operation - Operation that makes changes
+   */
+  private emitChangedEvent(operation: string) {
+    const event: BindingEvent = {binding: this, operation, type: 'changed'};
+    this.emit('changed', event);
+  }
+
+  /**
    * Tag the binding with names or name/value objects. A tag has a name and
    * an optional value. If not supplied, the tag name is used as the value.
    *
@@ -362,6 +401,7 @@ export class Binding<T = BoundValue> {
         Object.assign(this.tagMap, t);
       }
     }
+    this.emitChangedEvent('tag');
     return this;
   }
 
@@ -379,6 +419,7 @@ export class Binding<T = BoundValue> {
   inScope(scope: BindingScope): this {
     if (this._scope !== scope) this._clearCache();
     this._scope = scope;
+    this.emitChangedEvent('scope');
     return this;
   }
 
@@ -409,6 +450,7 @@ export class Binding<T = BoundValue> {
       }
       return getValue(ctx, options);
     };
+    this.emitChangedEvent('value');
   }
 
   /**

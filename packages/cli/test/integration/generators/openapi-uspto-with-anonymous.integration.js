@@ -7,11 +7,11 @@
 
 const path = require('path');
 const assert = require('yeoman-assert');
+const {TestSandbox} = require('@loopback/testlab');
+const {expectFileToMatchSnapshot} = require('../../snapshots');
+
 const generator = path.join(__dirname, '../../../generators/openapi');
 const specPath = path.join(__dirname, '../../fixtures/openapi/3.0/uspto.yaml');
-
-const testlab = require('@loopback/testlab');
-const TestSandbox = testlab.TestSandbox;
 
 // Test Sandbox
 const SANDBOX_PATH = path.resolve(__dirname, '../.sandbox');
@@ -23,7 +23,8 @@ const props = {
 };
 
 describe('openapi-generator specific files', () => {
-  const index = path.resolve(SANDBOX_PATH, 'src/controllers/index.ts');
+  const modelIndex = path.resolve(SANDBOX_PATH, 'src/models/index.ts');
+  const controIndex = path.resolve(SANDBOX_PATH, 'src/controllers/index.ts');
   const searchController = path.resolve(
     SANDBOX_PATH,
     'src/controllers/search.controller.ts',
@@ -51,32 +52,22 @@ describe('openapi-generator specific files', () => {
       .inDir(SANDBOX_PATH, () => testUtils.givenLBProject(SANDBOX_PATH))
       .withArguments('--promote-anonymous-schemas')
       .withPrompts(props);
+    assert.file(searchController);
+    expectFileToMatchSnapshot(searchController);
+
     assert.file(metadataController);
+    expectFileToMatchSnapshot(metadataController);
 
-    assert.fileContent(
-      searchController,
-      `async performSearch(@requestBody() _requestBody: PerformSearchRequestBody, ` +
-        `@param({name: 'version', in: 'path'}) version: string, ` +
-        `@param({name: 'dataset', in: 'path'}) dataset: string): ` +
-        `Promise<PerformSearchResponseBody> {`,
-    );
+    assert.file(performSearchRequestBodyModel);
+    expectFileToMatchSnapshot(performSearchRequestBodyModel);
 
-    assert.fileContent(
-      performSearchRequestBodyModel,
-      'export class PerformSearchRequestBody {',
-    );
+    assert.file(performSearchResponseBodyModel);
+    expectFileToMatchSnapshot(performSearchResponseBodyModel);
 
-    assert.fileContent(
-      performSearchResponseBodyModel,
-      'export type PerformSearchResponseBody = {',
-    );
+    assert.file(modelIndex);
+    expectFileToMatchSnapshot(modelIndex);
 
-    assert.fileContent(
-      performSearchResponseBodyModel,
-      '[additionalProperty: string]: {',
-    );
-
-    assert.fileContent(index, `export * from './search.controller';`);
-    assert.fileContent(index, `export * from './metadata.controller';`);
+    assert.file(controIndex);
+    expectFileToMatchSnapshot(controIndex);
   });
 });
