@@ -1,11 +1,11 @@
 import {bind} from '@loopback/core';
+import jsonmergepatch from 'json-merge-patch';
 import compare from 'json-schema-compare';
 import _ from 'lodash';
 import {
   ISpecificationExtension,
   isSchemaObject,
   OpenApiSpec,
-  PathsObject,
   ReferenceObject,
   SchemaObject,
 } from '../types';
@@ -20,68 +20,44 @@ export class ConsolidationEnhancer implements OASEnhancer {
   name = 'consolidate';
 
   modifySpec(spec: OpenApiSpec): OpenApiSpec {
-    const ctx: ConsolidateContext = {
-      paths: _.cloneDeep(spec.paths),
-      refs:
-        spec.components && spec.components.schemas
-          ? _.cloneDeep(spec.components.schemas)
-          : {},
-    };
-    const updatedSpec = this.consolidateSchemaObjects(spec, ctx);
+    const ctx: ConsolidateContext = {spec, updates: {paths: {}, refs: {}}};
+    const patch = this.consolidateSchemaObjects(ctx);
+    jsonmergepatch.apply(spec, patch);
 
-    return updatedSpec;
+    return spec;
   }
 
   /**
    *  Recursively search OpenApiSpec PathsObject for SchemaObjects with title property.
    *  Move reusable schema bodies to #/components/schemas and replace with json pointer.
-   *  Handles collisions /w title, schema body pair comparision.
+   *  Handles title collisions with schema body comparison.
    *
    */
-  private consolidateSchemaObjects(
-    spec: OpenApiSpec,
-    ctx: ConsolidateContext,
-  ): OpenApiSpec {
-    this.recursiveWalk(ctx.paths, ctx);
-
-    const updatedSpec = {
-      ...spec,
-      ...{
-        paths: ctx.paths,
-        components: {...spec.components, ...{schemas: ctx.refs}},
-      },
-    };
-
-    // tidy up empty objects
-    if (Object.keys(updatedSpec.components.schemas).length === 0) {
-      delete updatedSpec.components.schemas;
-    }
-    if (Object.keys(updatedSpec.components).length === 0) {
-      delete updatedSpec.components;
-    }
-
-    return updatedSpec;
+  private consolidateSchemaObjects(ctx: ConsolidateContext): object {
+    // use paths as root
+    this.recursiveWalk(ctx.spec.paths, ['paths'], ctx);
+    return jsonmergepatch.merge(ctx.updates.refs, ctx.updates.paths);
   }
 
+  // TODO(dougal83): perhaps replace foreach, look for known keys that can have ref
   private recursiveWalk(
     rootSchema: ISpecificationExtension,
+    parentPath: Array<string>,
     ctx: ConsolidateContext,
   ) {
     if (rootSchema && typeof rootSchema === 'object') {
       Object.entries(rootSchema).forEach(([key, subSchema]) => {
         if (subSchema) {
           this.preProcessSchema(subSchema);
-          this.recursiveWalk(subSchema, ctx);
-          const updatedSchema = this.postProcessSchema(subSchema, ctx);
-          if (updatedSchema) {
-            rootSchema[key] = updatedSchema;
-          }
+          this.recursiveWalk(subSchema, parentPath.concat(key), ctx);
+          this.postProcessSchema(subSchema, parentPath.concat(key), ctx);
         }
       });
     }
   }
 
   /**
+   * TODO(dougal83): REMOVE, improve array template.
    * Prepare current schema for processing before further tree traversal.
    *
    * Features:
@@ -105,7 +81,7 @@ export class ConsolidationEnhancer implements OASEnhancer {
 
   /**
    * Carry out schema consolidation after tree traversal. If 'title' property
-   * set then we consider current schema for consoildation. SchemaObjects with
+   * set then we consider current schema for consolidation. SchemaObjects with
    * properties (and title set) are moved to #/components/schemas/<title> and
    * replaced with ReferenceObject.
    *
@@ -113,54 +89,70 @@ export class ConsolidationEnhancer implements OASEnhancer {
    *  - name collision protection
    *
    * @param schema - current schema element to process
+   * @param parentPath - object path to parent
    * @param ctx - context object holding working data
    *
    */
   private postProcessSchema(
     schema: SchemaObject | ReferenceObject,
+    parentPath: Array<string>,
     ctx: ConsolidateContext,
-  ): ReferenceObject | undefined {
+  ) {
     // use title to discriminate references
     if (isSchemaObject(schema) && schema.properties && schema.title) {
       // name collison protection
       let instanceNo = 1;
       let title = schema.title;
+      let refSchema = this.getRefSchema(title, ctx);
       while (
-        this.refExists(title, ctx) &&
-        !compare(
-          schema as ISpecificationExtension,
-          this.getRefValue(title, ctx),
-          {
-            ignore: ['description'],
-          },
-        )
+        refSchema &&
+        !compare(schema as ISpecificationExtension, refSchema, {
+          ignore: ['description'],
+        })
       ) {
         title = `${schema.title}${instanceNo++}`;
+        refSchema = this.getRefSchema(title, ctx);
       }
-      // only add new reference schema
-      if (!this.refExists(title, ctx)) {
-        this.setRefValue(title, schema, ctx);
+      if (!refSchema) {
+        this.createRefPatch(title, schema, ctx);
       }
-      return <ReferenceObject>{$ref: `#/components/schemas/${title}`};
+      this.createPathPatch(title, parentPath, ctx);
     }
-    return undefined;
   }
 
-  private refExists(name: string, ctx: ConsolidateContext): boolean {
-    return _.has(ctx.refs, name);
-  }
-  private getRefValue(
+  private getRefSchema(
     name: string,
     ctx: ConsolidateContext,
-  ): ISpecificationExtension {
-    return ctx.refs[name];
+  ): ISpecificationExtension | undefined {
+    const schema =
+      _.get(ctx.spec, ['components', 'schemas', name]) ||
+      _.get(ctx.updates.refs, ['components', 'schemas', name]);
+
+    return schema;
   }
-  private setRefValue(
+  private createRefPatch(
     name: string,
     value: ISpecificationExtension,
     ctx: ConsolidateContext,
   ) {
-    ctx.refs[name] = value;
+    _.setWith(
+      ctx.updates.refs,
+      ['components', 'schemas', name],
+      value,
+      _.partial(Object, null),
+    );
+  }
+  private createPathPatch(
+    name: string,
+    path: Array<string>,
+    ctx: ConsolidateContext,
+  ) {
+    const source = _.get(ctx.spec, path);
+    const target = {
+      $ref: `#/components/schemas/${name}`,
+    };
+    const patch = jsonmergepatch.generate(source, target);
+    _.setWith(ctx.updates.paths, path, patch, _.partial(Object, null));
   }
 }
 
@@ -168,8 +160,9 @@ export class ConsolidationEnhancer implements OASEnhancer {
  * Type description for consolidation context
  */
 interface ConsolidateContext {
-  paths: PathsObject;
-  refs: {
-    [schema: string]: SchemaObject | ReferenceObject;
+  spec: OpenApiSpec;
+  updates: {
+    paths: object;
+    refs: object;
   };
 }
