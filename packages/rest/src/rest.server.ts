@@ -9,12 +9,15 @@ import {
   BindingScope,
   Constructor,
   Context,
+  createBindingFromClass,
   inject,
 } from '@loopback/context';
 import {Application, CoreBindings, Server} from '@loopback/core';
 import {HttpServer, HttpServerOptions} from '@loopback/http-server';
 import {
   getControllerSpec,
+  OASEnhancerService,
+  OAS_ENHANCER_SERVICE,
   OpenAPIObject,
   OpenApiSpec,
   OperationObject,
@@ -130,6 +133,12 @@ export class RestServer extends Context implements Server, HttpServerLike {
    * @param res - The response.
    */
 
+  protected _OASEnhancer: OASEnhancerService;
+  public get OASEnhancer(): OASEnhancerService {
+    this._setupOASEnhancerIfNeeded();
+    return this._OASEnhancer;
+  }
+
   protected _requestHandler: HttpRequestListener;
   public get requestHandler(): HttpRequestListener {
     if (this._requestHandler == null) {
@@ -217,6 +226,16 @@ export class RestServer extends Context implements Server, HttpServerLike {
 
     this.bind(RestBindings.BASE_PATH).toDynamicValue(() => this._basePath);
     this.bind(RestBindings.HANDLER).toDynamicValue(() => this.httpHandler);
+  }
+
+  protected _setupOASEnhancerIfNeeded() {
+    if (this._OASEnhancer != null) return;
+    this.add(
+      createBindingFromClass(OASEnhancerService, {
+        key: OAS_ENHANCER_SERVICE,
+      }).inScope(BindingScope.SINGLETON),
+    );
+    this._OASEnhancer = this.getSync(OAS_ENHANCER_SERVICE);
   }
 
   protected _setupRequestHandlerIfNeeded() {
@@ -753,6 +772,10 @@ export class RestServer extends Context implements Server, HttpServerLike {
     if (requestContext) {
       spec = this.updateSpecFromRequest(spec, requestContext);
     }
+
+    // Apply OAS enhancers to the OpenAPI specification
+    this.OASEnhancer.spec = spec;
+    spec = await this.OASEnhancer.applyAllEnhancers();
 
     return spec;
   }
